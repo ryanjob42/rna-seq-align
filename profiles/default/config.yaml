@@ -1,0 +1,24 @@
+# The networked file system can be a little slow.
+# Files can take up to 30 seconds to appear.
+output-wait: 30
+
+# If a job fails, retry it a couple of times in case it's a temporary issue.
+# retries: 2
+
+# Execute the workflow using Slurm jobs with no limit on the number
+# of Slurm jobs created.
+# Note: some rule executions will be grouped together,
+# so one Slurm job may be several rule executions.
+executor: slurm
+jobs: unlimited
+
+set-threads:
+  all: 1
+
+default-resources:
+  slurm_partition: short-cpu
+  tasks: 1
+  cpus_per_task: 1
+  mem_mb_per_cpu: 500
+  runtime: 15     # Runtime is measured in minutes.
+  slurm_extra: '"--exclusive=user"'     # Notice both the single and double quotes.
