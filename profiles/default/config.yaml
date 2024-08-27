@@ -22,3 +22,6 @@ default-resources:
   mem_mb_per_cpu: 500
   runtime: 15     # Runtime is measured in minutes.
   slurm_extra: '"--exclusive=user"'     # Notice both the single and double quotes.
+
+groups: 'generate_single_index=gen_index_grp'
+group-components: 'gen_index_grp=10'
