@@ -20,7 +20,8 @@ if SPLIT_COUNT < 1:
 # Runs everything.
 rule all:
     input:
-        SPLIT_GENOME_INDEX_DIR
+        SPLIT_GENOME_INDEX_DIR,
+        'split_index_list.txt'
 
 # Downloads the faSplit tool.
 rule download_faSplit:
@@ -71,3 +72,30 @@ rule generate_single_index:
         --genomeSAindexNbases 12
         exit 0
     '''
+
+# This function will find all of the genome indexes which were actually created
+# by all the "generate_single_index" rule executions. To make sure this behaves
+# with Snakemake's planning, this uses their suggested approach for finding what
+# got created. See the link below.
+# https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#data-dependent-conditional-execution
+def all_generated_inexes(wildcards):
+    # Get the specific execution of the "generate_all_indexes" rule.
+    generate_indexes_rule_execution = checkpoints.generate_all_indexes.get(**wildcards)
+
+    # Get the output from that rule. This will be the genome index directory.
+    index_dir = generate_indexes_rule_execution.output[0]
+
+    # Use Snakemake's "glob_wildcards" to get the set of split numbers which
+    # successfully created a genome index.
+    search_string = os.path.join(index_dir, "split_{number}.fa")
+    split_numbers = glob_wildcards(search_string).number
+
+    # Use Snakemake's "expand" to create the list of discovered indexes.
+    return expand(search_string, split_numbers)
+
+rule split_index_list:
+    input: all_generated_inexes
+    output: 'split_index_list.txt'
+    run:
+        with open(output[0], 'w') as out_file:
+            out_file.writelines(idx + '\n' for idx in input)
