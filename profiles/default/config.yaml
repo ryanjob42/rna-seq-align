@@ -14,6 +14,11 @@ jobs: unlimited
 
 set-threads:
   all: 1
+  download_faSplit: 1
+  split_fasta: 1
+  generate_all_indexes: 1
+  generate_single_index: 1
+  split_index_list: 1
 
 default-resources:
   slurm_partition: short-cpu
@@ -23,5 +28,8 @@ default-resources:
   runtime: 15     # Runtime is measured in minutes.
   slurm_extra: '"--exclusive=user"'     # Notice both the single and double quotes.
 
-groups: 'generate_single_index=gen_index_grp'
-group-components: 'gen_index_grp=10'
+groups:
+- generate_single_index=gen_index_grp
+
+group-components:
+- gen_index_grp=10
