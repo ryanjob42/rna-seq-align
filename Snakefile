@@ -1,62 +1,73 @@
-genome_fasta = 'data/Mus_musculus.GRCm39.dna_sm.toplevel.fa'
-genome_gtf = 'data/Mus_musculus.GRCm39.110.gtf'
+GENOME_FASTA = 'data/Mus_musculus.GRCm39.dna_sm.toplevel.fa'
+GENOME_GTF = 'data/Mus_musculus.GRCm39.110.gtf'
+SPLIT_COUNT = 20
+SPLIT_FASTA_DIR = 'split_fasta'
+SPLIT_GENOME_INDEX_DIR = 'split_genome_index'
+FASTQ_DIR = 'fastq'
+ALIGNMENT_DIR = 'alignment'
 
+# STAR nubmers each split 0, 1, 2, etc. However, they wil be 0-padded to the longest length.
+# For example, if there are 11 splits (i.e., 0 to 10), they will be 00, 01, 02, ..., 09, 10.
+SPLIT_NUMBERS = [str(i).zfill(len(str(SPLIT_COUNT-1))) for i in range(SPLIT_COUNT)]
+
+THREAD_COUNT = 128
+RAM_AMOUNT = 60000000000
+
+if SPLIT_COUNT < 1:
+    print(f'The split count must be at least 1, but was: {SPLIT_COUNT}')
+    exit(1)
+
+# Runs everything.
 rule all:
     input:
-        split_genome = 'split_genome'
+        SPLIT_GENOME_INDEX_DIR
 
+# Downloads the faSplit tool.
 rule download_faSplit:
     output: 'tools/faSplit'
     shell: 'rsync -aP rsync://hgdownload.soe.ucsc.edu/genome/admin/exe/linux.x86_64/faSplit {output}'
 
-# This is a checkpoint rule so we can find all the files generated
-# in the output directory and create a genome index from each
-# as a separate rule execution.
-checkpoint perform_split:
+# Splits single FASTA file into pieces.
+# This will be skipped if the user asked for only a single split.
+rule split_fasta:
     input:
         fasplit = 'tools/faSplit',
-        fasta = genome_fasta
+        fasta = GENOME_FASTA
     output:
-        directory('split_genome')
-    shell: '''
-        mkdir -p "{output}"
-        {input.fasplit} byname {input.fasta:q} "{output}/"
+        expand(f'{SPLIT_FASTA_DIR}/split_{{number}}.fa', number=SPLIT_NUMBERS)
+    shell: f'''
+        mkdir -p "{SPLIT_FASTA_DIR}"
+        "{{input.fasplit}}" sequence "{{input.fasta:}}" {SPLIT_COUNT} "{{output}}/split_"
     '''
 
-def get_all_split_indices(wildcards):
-    # Get the directory that the "perform_split" checkpoint created.
-    split_dir = checkpoints.perform_split.get(**wildcards).output[0]
+# Depending on how the splits are performed, some of the generated FASTA files
+# may fail to generate an index. Per Reema, this is OK and we can just ignore those.
+# This doesn't directly work with Snakemake however, as it requires the outputs actually
+# get created. To work around this, trying to generate an index will output a "flag" file
+# that indicates that it tried to generate the index. This rule will gather all those,
+# and is set up as a "checkpoint" so Snakemake will detect which indices are here.
+# Also, we use "ensure" to indicate that the directory can't be empty.
+checkpoint generate_all_indexes:
+    input: expand('flags/split_index_{number}.done', number=SPLIT_NUMBERS)
+    output: ensure(directory(SPLIT_GENOME_INDEX_DIR), non_empty=True)
 
-    # Create a string that Snakemake understands for finding all the
-    # fasta (.fa) files in that directory.
-    fa_search_string = os.path.join(split_dir, '{name}.fa')
-
-    # Use Snakemake's "glob_wildcards" to find the names of all the
-    # fasta files. This just returns the "name" part in the search string.
-    fa_names = glob_wildcards(fa_search_string).name
-
-    # Use Snakemake's "expand" to return a list of all the fasta files.
-    return expand(fa_search_string, name=fa_names)
-
-rule generate_all_indexes:
-    input:
-        get_all_split_indices
-    output:
-        directory('genome_index/')
-
+# If there's only supposed to be a single split, there's no need to actually do the split.
+# In that case, we just use the full FASTA file the user gave.
+# Since generating an index may fail (which is OK per Reema), this rule outputs a "flag" file
+# indicating it tried to generate the index. Additionally, the command ends with "exit 0" to
+# make sure STAR's exit code won't cause Snakemake to fail the execution.
 rule generate_single_index:
     input:
-        split_fasta = 'split_genome/{name}.fa',
-        gtf_file = genome_gtf
-    output:
-        directory('genome_index/{name}')
-    shell: '''
+        fasta = branch(SPLIT_COUNT > 1, f'split_fasta/split_{{number}}.fa', GENOME_FASTA),
+        gtf = GENOME_GTF
+    output: touch(f'flags/split_index_{{number}}.done')
+    shell: f'''
         STAR \
-        --runThreadN 40 \
         --runMode genomeGenerate \
-        --genomeDir "GenomeIndex/{name}" \
-        --genomeFastaFiles {input.split_fasta:q} \
-        --sjdbGTFfile {input.gtf_file:q} \
+        --genomeDir "{SPLIT_GENOME_INDEX_DIR}/split_{{wildcards.number}}.fa" \
+        --genomeFastaFiles "{{input.fasta}}" \
+        --sjdbGTFfile "{{input.gtf}}" \
         --sjdbOverhang 99 \
         --genomeSAindexNbases 12
+        exit 0
     '''

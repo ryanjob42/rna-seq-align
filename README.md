@@ -30,6 +30,7 @@ mkdir -p Genome
 This is the loop Reema gave (with slight modifications to work for me).
 
 ```shell
+for file in Genome/*.fa
 do
     STAR --runThreadN 40 \
         --runMode genomeGenerate \
