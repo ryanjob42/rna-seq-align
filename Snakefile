@@ -20,8 +20,8 @@ if SPLIT_COUNT < 1:
 # Runs everything.
 rule all:
     input:
-        SPLIT_GENOME_INDEX_DIR,
-        'split_index_list.txt'
+        index_attempts = expand('flags/split_index_{number}.done', number=SPLIT_NUMBERS),
+        index_list = 'split_index_list.txt'
 
 # Downloads the faSplit tool.
 rule download_faSplit:
@@ -38,7 +38,7 @@ rule split_fasta:
         expand(f'{SPLIT_FASTA_DIR}/split_{{number}}.fa', number=SPLIT_NUMBERS)
     shell: f'''
         mkdir -p "{SPLIT_FASTA_DIR}"
-        "{{input.fasplit}}" sequence "{{input.fasta:}}" {SPLIT_COUNT} "{{output}}/split_"
+        "{{input.fasplit}}" sequence "{{input.fasta:}}" {SPLIT_COUNT} "{{SPLIT_FASTA_DIR}}/split_"
     '''
 
 # Depending on how the splits are performed, some of the generated FASTA files
@@ -61,24 +61,27 @@ rule generate_single_index:
     input:
         fasta = branch(SPLIT_COUNT > 1, f'split_fasta/split_{{number}}.fa', GENOME_FASTA),
         gtf = GENOME_GTF
+    params:
+        genome_index_dir = SPLIT_GENOME_INDEX_DIR
     output: touch(f'flags/split_index_{{number}}.done')
-    shell: f'''
-        STAR \
-        --runMode genomeGenerate \
-        --genomeDir "{SPLIT_GENOME_INDEX_DIR}/split_{{wildcards.number}}.fa" \
-        --genomeFastaFiles "{{input.fasta}}" \
-        --sjdbGTFfile "{{input.gtf}}" \
-        --sjdbOverhang 99 \
-        --genomeSAindexNbases 12
-        exit 0
-    '''
+    script: 'scripts/generate_single_index.py'
+#    shell: f'''
+#        STAR \
+#        --runMode genomeGenerate \
+#        --genomeDir "{SPLIT_GENOME_INDEX_DIR}/split_{{wildcards.number}}.fa" \
+#        --genomeFastaFiles "{{input.fasta}}" \
+#        --sjdbGTFfile "{{input.gtf}}" \
+#        --sjdbOverhang 99 \
+#        --genomeSAindexNbases 12
+#        exit 0
+#    '''
 
 # This function will find all of the genome indexes which were actually created
 # by all the "generate_single_index" rule executions. To make sure this behaves
 # with Snakemake's planning, this uses their suggested approach for finding what
 # got created. See the link below.
 # https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#data-dependent-conditional-execution
-def all_generated_inexes(wildcards):
+def all_generated_indexes(wildcards):
     # Get the specific execution of the "generate_all_indexes" rule.
     generate_indexes_rule_execution = checkpoints.generate_all_indexes.get(**wildcards)
 
@@ -91,11 +94,9 @@ def all_generated_inexes(wildcards):
     split_numbers = glob_wildcards(search_string).number
 
     # Use Snakemake's "expand" to create the list of discovered indexes.
-    return expand(search_string, split_numbers)
+    return expand(search_string, number=split_numbers)
 
 rule split_index_list:
-    input: all_generated_inexes
+    input: all_generated_indexes
     output: 'split_index_list.txt'
-    run:
-        with open(output[0], 'w') as out_file:
-            out_file.writelines(idx + '\n' for idx in input)
+    script: 'scripts/split_index_list.py'

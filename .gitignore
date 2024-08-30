@@ -2,7 +2,10 @@
 # or any of the output directories.
 .snakemake
 data/
+flags/
+split_fasta/
 split_genome/
+split_genome_index/
 tools/
 
 #######################################################
