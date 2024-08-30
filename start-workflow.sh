@@ -3,4 +3,4 @@
 source ~/.bashrc
 conda activate rna-seq-align
 module load singularity
-snakemake
+snakemake --jobs 1
