@@ -20,8 +20,7 @@ if SPLIT_COUNT < 1:
 # Runs everything.
 rule all:
     input:
-        index_attempts = expand('flags/split_index_{number}.done', number=SPLIT_NUMBERS),
-        index_list = 'split_index_list.txt'
+        'split_index_list.txt'
 
 # Downloads the faSplit tool.
 rule download_faSplit:
@@ -49,8 +48,8 @@ rule split_fasta:
 # and is set up as a "checkpoint" so Snakemake will detect which indices are here.
 # Also, we use "ensure" to indicate that the directory can't be empty.
 checkpoint generate_all_indexes:
-    input: expand('flags/split_index_{number}.done', number=SPLIT_NUMBERS)
-    output: ensure(directory(SPLIT_GENOME_INDEX_DIR), non_empty=True)
+    input: expand(f'{SPLIT_GENOME_INDEX_DIR}/split_index_{{number}}.done', number=SPLIT_NUMBERS)
+    output: temp(touch('all_generated.txt'))
 
 # If there's only supposed to be a single split, there's no need to actually do the split.
 # In that case, we just use the full FASTA file the user gave.
@@ -63,18 +62,8 @@ rule generate_single_index:
         gtf = GENOME_GTF
     params:
         genome_index_dir = SPLIT_GENOME_INDEX_DIR
-    output: touch(f'flags/split_index_{{number}}.done')
+    output: touch(f'{SPLIT_GENOME_INDEX_DIR}/split_index_{{number}}.done')
     script: 'scripts/generate_single_index.py'
-#    shell: f'''
-#        STAR \
-#        --runMode genomeGenerate \
-#        --genomeDir "{SPLIT_GENOME_INDEX_DIR}/split_{{wildcards.number}}.fa" \
-#        --genomeFastaFiles "{{input.fasta}}" \
-#        --sjdbGTFfile "{{input.gtf}}" \
-#        --sjdbOverhang 99 \
-#        --genomeSAindexNbases 12
-#        exit 0
-#    '''
 
 # This function will find all of the genome indexes which were actually created
 # by all the "generate_single_index" rule executions. To make sure this behaves
@@ -97,6 +86,8 @@ def all_generated_indexes(wildcards):
     return expand(search_string, number=split_numbers)
 
 rule split_index_list:
-    input: all_generated_indexes
+    input:
+        flag = 'all_generated.txt',
+        indexes = all_generated_indexes
     output: 'split_index_list.txt'
     script: 'scripts/split_index_list.py'

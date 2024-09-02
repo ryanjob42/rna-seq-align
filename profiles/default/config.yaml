@@ -11,6 +11,9 @@ output-wait: 30
 # so one Slurm job may be several rule executions.
 executor: slurm
 jobs: unlimited
+#cores: 128
+#resources:
+#    mem_mb: 500000
 
 set-threads:
   all: 1
@@ -23,12 +26,10 @@ set-threads:
 default-resources:
   slurm_partition: short-cpu
   tasks: 1
+  cpus_per_task: 1
   mem_mb_per_cpu: 500
   runtime: 15     # Runtime is measured in minutes.
   slurm_extra: '"--exclusive=user"'     # Notice both the single and double quotes.
 
-groups:
-- generate_single_index=gen_index_grp
-
-group-components:
-- gen_index_grp=5
+#groups: '"generate_single_index=mygroup"'
+#group-components: '"mygroup=5"'
