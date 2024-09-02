@@ -10,9 +10,6 @@ ALIGNMENT_DIR = 'alignment'
 # For example, if there are 11 splits (i.e., 0 to 10), they will be 00, 01, 02, ..., 09, 10.
 SPLIT_NUMBERS = [str(i).zfill(len(str(SPLIT_COUNT-1))) for i in range(SPLIT_COUNT)]
 
-THREAD_COUNT = 128
-RAM_AMOUNT = 60000000000
-
 if SPLIT_COUNT < 1:
     print(f'The split count must be at least 1, but was: {SPLIT_COUNT}')
     exit(1)
@@ -20,7 +17,7 @@ if SPLIT_COUNT < 1:
 # Runs everything.
 rule all:
     input:
-        'split_index_list.txt'
+        'all_aligned.txt'
 
 # Downloads the faSplit tool.
 rule download_faSplit:
@@ -72,7 +69,7 @@ rule generate_single_index:
 # with Snakemake's planning, this uses their suggested approach for finding what
 # got created. See the link below.
 # https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#data-dependent-conditional-execution
-def all_generated_indexes(wildcards):
+def successful_index_generation_numbers(wildcards):
     # Get the specific execution of the "generate_all_indexes" rule.
     generate_indexes_rule_execution = checkpoints.generate_all_indexes.get(**wildcards)
 
@@ -82,17 +79,19 @@ def all_generated_indexes(wildcards):
     # Use Snakemake's "glob_wildcards" to get the set of split numbers which
     # successfully created a genome index.
     search_string = os.path.join(index_dir, "split_{number}.fa")
-    split_numbers = glob_wildcards(search_string).number
+    return glob_wildcards(search_string).number
 
-    # Use Snakemake's "expand" to create the list of discovered indexes.
-    return expand(search_string, number=split_numbers)
+def fastq_experiment_ids(wildcards):
+    search_string = os.path.join(FASTQ_DIR, "{experiment}.fastq.gz")
+    return glob_wildcards(search_string).experiment
 
-rule split_index_list:
+rule perform_all_alignments:
     input:
-        flag = 'all_generated.txt',
-        indexes = all_generated_indexes
-    output: 'split_index_list.txt'
-    script: 'scripts/split_index_list.py'
+        generation_complete_flag = 'all_generated.txt',
+        expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}',
+            number=successful_index_generation_numbers,
+            experiment=fastq_experiment_ids)
+    output: temp(touch('all_aligned.txt'))
 
 rule perform_single_alignment:
     input:
@@ -100,5 +99,5 @@ rule perform_single_alignment:
         genome_index = f'{SPLIT_GENOME_INDEX_DIR}/split_{{number}}.fa',
         fastq = f'{FASTQ_DIR}/{{experiment}}.fastq.gz'
     output:
-        f'{ALIGNMENT_DIR}/split_{{wildcards.num}}/{{wildcards.experiment}}'
+        f'{ALIGNMENT_DIR}/split_{{wildcards.number}}/{{wildcards.experiment}}'
     script: 'scripts/perform_single_alignment.py'
