@@ -31,5 +31,8 @@ default-resources:
   runtime: 15     # Runtime is measured in minutes.
   slurm_extra: '"--exclusive=user"'     # Notice both the single and double quotes.
 
-#groups: '"generate_single_index=mygroup"'
-#group-components: '"mygroup=5"'
+set-resources:
+  perform_single_alignment:
+    cpus_per_task: 128
+    mem_mb_per_cpu: 3500    # About 500,000 MB / 128 cpus. Must use max CPU count with "--exclusive".
+    slurm_extra: '"--exclusive"'    # Notice both the single and double quotes.

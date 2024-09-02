@@ -93,3 +93,12 @@ rule split_index_list:
         indexes = all_generated_indexes
     output: 'split_index_list.txt'
     script: 'scripts/split_index_list.py'
+
+rule perform_single_alignment:
+    input:
+        generation_complete_flag = 'all_generated.txt',
+        genome_index = f'{SPLIT_GENOME_INDEX_DIR}/split_{{number}}.fa',
+        fastq = f'{FASTQ_DIR}/{{experiment}}.fastq.gz'
+    output:
+        f'{ALIGNMENT_DIR}/split_{{wildcards.num}}/{{wildcards.experiment}}'
+    script: 'scripts/perform_single_alignment.py'
