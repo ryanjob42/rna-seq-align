@@ -48,8 +48,10 @@ rule split_fasta:
 # and is set up as a "checkpoint" so Snakemake will detect which indices are here.
 # Also, we use "ensure" to indicate that the directory can't be empty.
 checkpoint generate_all_indexes:
-    input: expand(f'{SPLIT_GENOME_INDEX_DIR}/split_index_{{number}}.done', number=SPLIT_NUMBERS)
-    output: temp(touch('all_generated.txt'))
+    input: expand(f'flags/split_index_{{number}}.done', number=SPLIT_NUMBERS)
+    output:
+        flag = temp(touch('all_generated.txt')),
+        out_dir = directory(SPLIT_GENOME_INDEX_DIR)
 
 # If there's only supposed to be a single split, there's no need to actually do the split.
 # In that case, we just use the full FASTA file the user gave.
@@ -62,7 +64,7 @@ rule generate_single_index:
         gtf = GENOME_GTF
     params:
         genome_index_dir = SPLIT_GENOME_INDEX_DIR
-    output: touch(f'{SPLIT_GENOME_INDEX_DIR}/split_index_{{number}}.done')
+    output: touch(f'flags/split_index_{{number}}.done')
     script: 'scripts/generate_single_index.py'
 
 # This function will find all of the genome indexes which were actually created
@@ -75,7 +77,7 @@ def all_generated_indexes(wildcards):
     generate_indexes_rule_execution = checkpoints.generate_all_indexes.get(**wildcards)
 
     # Get the output from that rule. This will be the genome index directory.
-    index_dir = generate_indexes_rule_execution.output[0]
+    index_dir = generate_indexes_rule_execution.output.out_dir
 
     # Use Snakemake's "glob_wildcards" to get the set of split numbers which
     # successfully created a genome index.
