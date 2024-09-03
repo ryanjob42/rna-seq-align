@@ -5,6 +5,7 @@ SPLIT_FASTA_DIR = 'split_fasta'
 SPLIT_GENOME_INDEX_DIR = 'split_genome_index'
 FASTQ_DIR = 'fastq'
 ALIGNMENT_DIR = 'alignment'
+READ_COUNTS_DIR = 'read_counts'
 
 # STAR nubmers each split 0, 1, 2, etc. However, they wil be 0-padded to the longest length.
 # For example, if there are 11 splits (i.e., 0 to 10), they will be 00, 01, 02, ..., 09, 10.
@@ -17,7 +18,7 @@ if SPLIT_COUNT < 1:
 # Runs everything.
 rule all:
     input:
-        'all_aligned.txt'
+        'all_counts.txt'
 
 # Downloads the faSplit tool.
 rule download_faSplit:
@@ -81,23 +82,46 @@ def successful_index_generation_numbers(wildcards):
     search_string = os.path.join(index_dir, "split_{number}.fa")
     return glob_wildcards(search_string).number
 
+# Gets all of the experiment IDs for all FASTQ files found in the FASTQ directory.
 def fastq_experiment_ids(wildcards):
     search_string = os.path.join(FASTQ_DIR, "{experiment}.fastq.gz")
     return glob_wildcards(search_string).experiment
 
+# Ensures all of the alignments are completed.
 rule perform_all_alignments:
     input:
         generation_complete_flag = 'all_generated.txt',
-        expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}',
+        alignments = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}',
             number=successful_index_generation_numbers,
             experiment=fastq_experiment_ids)
     output: temp(touch('all_aligned.txt'))
 
+# Performs a single alignment.
 rule perform_single_alignment:
     input:
         generation_complete_flag = 'all_generated.txt',
         genome_index = f'{SPLIT_GENOME_INDEX_DIR}/split_{{number}}.fa',
         fastq = f'{FASTQ_DIR}/{{experiment}}.fastq.gz'
     output:
-        f'{ALIGNMENT_DIR}/split_{{wildcards.number}}/{{wildcards.experiment}}'
+        f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}'
     script: 'scripts/perform_single_alignment.py'
+
+# Computes all read counts for all splits.
+rule compute_all_read_counts:
+    input:
+        read_counts = expand(f'{READ_COUNTS_DIR}/split_{{number}}_read_counts.txt', number=successful_index_generation_numbers),
+        read_stats = expand(f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt', number=successful_index_generation_numbers)
+    output: temp(touch('all_counts.txt'))
+
+# Computes the read counts for a single split.
+rule compute_split_read_counts:
+    input:
+        annotations = GENOME_GTF,
+        bam_files = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam', experiment=fastq_experiment_ids)
+    output:
+        read_counts = f'{READ_COUNTS_DIR}/split_{{number}}_read_counts.txt',
+        read_stats = f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt'
+    params:
+        pair_ended = True   #FIXME
+    script:
+        'scripts/read_counts.R'
