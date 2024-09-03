@@ -55,7 +55,7 @@ def perform_alignment(genome_index_path: str, fastq_path: str, output_path: str)
             '--genomeDir', genome_index_path,
             '--readFilesIn', fastq_path,
             '--readFilesCommand', 'gunzip -c',
-            '--outSAMtype', 'BAM SortedByCoordinate',
+            '--outSAMtype', 'BAM', 'SortedByCoordinate',
             '--limitBAMsortRAM', '60000000000',
             '--outBAMsortingThreadN', '128',
             '--outFileNamePrefix', output_path,
