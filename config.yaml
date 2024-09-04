@@ -1,0 +1,26 @@
+# The FASTA file containing the genome to split and create indexes of.
+genome-fasta-file: data/Mus_musculus.GRCm39.dna_sm.toplevel.fa
+
+# The number of splits to create when splitting the genome FASTA file.
+split-count: 20
+
+# The GTF annotations file.
+genome-gtf-file: data/Mus_musculus.GRCm39.110.gtf
+
+# The directory where the FASTQ files are stored.
+fastq-directory: fastq
+
+# The directory where the splits of the genome FASTA file will be stored.
+# These will also be FASTA files.
+split-fasta-output-directory: split_fasta
+
+# The directory where the genome indexes created from the genome FASTA splits will be stored.
+star-genome-index-output-directory: split_genome_index
+
+# The directory where STAR alignments of the FASTQ files will be stored.
+# They are grouped per split.
+star-alignment-output-directory: alignment
+
+# The directory where the read counts (and their stats) will be stored.
+# One set of counts is generated per split.
+read-counts-output-directory: read_counts

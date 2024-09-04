@@ -1,11 +1,16 @@
-GENOME_FASTA = 'data/Mus_musculus.GRCm39.dna_sm.toplevel.fa'
-GENOME_GTF = 'data/Mus_musculus.GRCm39.110.gtf'
-SPLIT_COUNT = 20
-SPLIT_FASTA_DIR = 'split_fasta'
-SPLIT_GENOME_INDEX_DIR = 'split_genome_index'
-FASTQ_DIR = 'fastq'
-ALIGNMENT_DIR = 'alignment'
-READ_COUNTS_DIR = 'read_counts'
+# Read the configuration file and create some shorthand variables
+# to make it easier to use, and so there is only one place to make
+# changes if the names of the configurations change.
+configfile: 'config.yaml'
+
+GENOME_FASTA = config['genome-fasta-file']
+GENOME_GTF = config['genome-gtf-file']
+FASTQ_DIR = config['fastq-directory']
+SPLIT_COUNT = config['split-count']
+SPLIT_FASTA_DIR = config['split-fasta-output-directory']
+SPLIT_GENOME_INDEX_DIR = config['star-genome-index-output-directory']
+ALIGNMENT_DIR = config['star-alignment-output-directory']
+READ_COUNTS_DIR = config['read-counts-output-directory']
 
 # STAR nubmers each split 0, 1, 2, etc. However, they wil be 0-padded to the longest length.
 # For example, if there are 11 splits (i.e., 0 to 10), they will be 00, 01, 02, ..., 09, 10.
