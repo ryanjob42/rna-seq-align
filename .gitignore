@@ -11,6 +11,10 @@ split_genome/
 split_genome_index/
 tools/
 
+# Track specific files found in excluded folders.
+!data/README.md
+!fastq/README.md
+
 # Don't track Vim's swap files.
 *.swp
 

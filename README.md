@@ -1,51 +1,34 @@
-# rna-seq-align
-A workflow for RNA sequence alignment.
+# RNA Sequence Alignment
+A Snakemake workflow for RNA sequence alignment.
 
-## Notes - Testing Splitting
+## Setup
+There is a one-time setup process for this workflow.
+See the [First Time Setup](./docs/First%20Time%20Setup.md) instructions for more details.
 
-Downloaded `faSplit`.
+## Usage
+There are a few important pieces to using this workflow.
 
-```shell
-rsync -aP rsync://hgdownload.soe.ucsc.edu/genome/admin/exe/linux.x86_64/faSplit ./
-```
+First, you will update the `config.yaml` configuration file.
+This is a text file that you can use to tell the workflow what you want to do.
+The file is commented as to what each setting does.
 
-Running with no arguments will display the help info.
-Using `--help` will not.
+Second, you'll upload your genome's FASTA file and annotations file (the .gtf file).
+The default place for them is in the `data` folder here, but you can change the folder using the `config.yaml` file.
+Note: you may need to change the names of these files in the `config.yaml` file.
 
-Downloaded the example files Reema used in her email.
+Third, you'll upload your FASTQ files you want to align.
+The default place for them is in the `fastq` folder here, but you can change that using the `config.yaml` file.
+Currently, the workflow will assume these are all single-ended files, and that you want to use all of them.
+Ryan is working to change this, and will have an update soon.
 
-```shell
-scp racecar:/data4/singh/DATA/Mus_musculus.GRCm39.dna_sm.toplevel.fa ./
-scp racecar:/data4/singh/DATA/Mus_musculus.GRCm39.110.gtf ./
-```
+Finally, once everything is ready, you can simply run the `start-workflow.sh` script.
+This contains the couple of commands needed to run Snakemake.
+While it's running, you MUST leave the terminal window open, otherwise it will stop the workflow.
 
-Split the fasta file how Reema suggested.
-This created 61 different fasta files.
-
-```shell
-mkdir -p Genome
-./faSplit byname ./Mus_musculus.GRCm39.dna_sm.toplevel.fa Genome/
-```
-
-This is the loop Reema gave (with slight modifications to work for me).
-
-```shell
-for file in Genome/*.fa
-do
-    STAR --runThreadN 40 \
-        --runMode genomeGenerate \
-        --genomeDir GenomeIndex/$file \
-        --genomeFastaFiles $file \
-        --sjdbGTFfile ./Mus_musculus.GRCm39.110.gtf \
-        --sjdbOverhang 99 \
-        --genomeSAindexNbases 12
-done
-```
-
-Ran a single iteration of it by manually assigning `export file=GenomeIndex/10.fa`.
-It took about 2.5 minutes to run that one iteration.
-STAR created the folder `GenomeIndex/Genome/10.fa/` with a bunch of files in it.
-Reema says she "ran the above script two times", but I don't see how that would affect anything.
-
-At this point, I'm going to start creating the Snakemake workflow.
-Then I can run this more properly and see why she might want to run it twice.
+If you'd like to be able to close the terminal window, here is what you can do:
+1. Run the `tmux` command. After a moment, the terminal will refresh, and you'll see a (potentially green) status bar at the bottom.
+   1. The `tmux` program lets you start a command, leave, then come back.
+2. Run the `start-workflow.sh` command. Give it a minute or two to make sure it's running.
+3. When you want to leave, press `Ctrl+b`, then tap `d` to "detatch" from your tmux session.
+   1. It's the same on all platforms: Windows, Linux, or Mac.
+4. To re-attach later, simply run the command `tmux attach`.
