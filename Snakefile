@@ -109,6 +109,7 @@ rule perform_single_alignment:
 # Computes all read counts for all splits.
 rule compute_all_read_counts:
     input:
+        alignment_complete_flag = 'all_aligned.txt',
         read_counts = expand(f'{READ_COUNTS_DIR}/split_{{number}}_read_counts.txt', number=successful_index_generation_numbers),
         read_stats = expand(f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt', number=successful_index_generation_numbers)
     output: temp(touch('all_counts.txt'))
@@ -116,6 +117,7 @@ rule compute_all_read_counts:
 # Computes the read counts for a single split.
 rule compute_split_read_counts:
     input:
+        alignment_complete_flag = 'all_aligned.txt',
         annotations = GENOME_GTF,
         bam_files = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam', experiment=fastq_experiment_ids)
     output:
