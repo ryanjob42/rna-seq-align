@@ -2,18 +2,10 @@
 # Files can take up to 30 seconds to appear.
 output-wait: 30
 
-# If a job fails, retry it a couple of times in case it's a temporary issue.
-# retries: 2
-
-# Execute the workflow using Slurm jobs with no limit on the number
-# of Slurm jobs created.
-# Note: some rule executions will be grouped together,
-# so one Slurm job may be several rule executions.
+# Execute the workflow using Slurm jobs, limiting it to 10
+# simultaneous jobs so the system doesn't get overwhelmed.
 executor: slurm
 jobs: 10
-#cores: 128
-#resources:
-#    mem_mb: 500000
 
 set-threads:
   all: 1
