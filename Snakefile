@@ -87,7 +87,7 @@ def fastq_experiment_ids(wildcards):
 # Ensures all of the alignments are completed.
 rule perform_all_alignments:
     input:
-        generation_complete_flag = 'all_generated.txt',
+        generation_complete_flag = ancient('all_generated.txt'),
         alignments = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam',
             number=successful_index_generation_numbers,
             experiment=fastq_experiment_ids)
@@ -96,7 +96,7 @@ rule perform_all_alignments:
 # Performs a single alignment.
 rule perform_single_alignment:
     input:
-        generation_complete_flag = 'all_generated.txt',
+        generation_complete_flag = ancient('all_generated.txt'),
         genome_index = f'{SPLIT_GENOME_INDEX_DIR}/split_{{number}}.fa',
         fastq = f'{FASTQ_DIR}/{{experiment}}.fq.gz'
     output:
@@ -106,7 +106,7 @@ rule perform_single_alignment:
 # Computes all read counts for all splits.
 rule compute_all_read_counts:
     input:
-        alignment_complete_flag = 'all_aligned.txt',
+        alignment_complete_flag = ancient('all_aligned.txt'),
         read_counts = expand(f'{READ_COUNTS_DIR}/split_{{number}}_read_counts.txt', number=successful_index_generation_numbers),
         read_stats = expand(f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt', number=successful_index_generation_numbers)
     output: temp(touch('all_counts.txt'))
@@ -114,7 +114,7 @@ rule compute_all_read_counts:
 # Computes the read counts for a single split.
 rule compute_split_read_counts:
     input:
-        alignment_complete_flag = 'all_aligned.txt',
+        alignment_complete_flag = ancient('all_aligned.txt'),
         annotations = GENOME_GTF,
         bam_files = expand(
             f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam',
