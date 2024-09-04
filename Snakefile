@@ -71,27 +71,19 @@ rule generate_single_index:
 # got created. See the link below.
 # https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#data-dependent-conditional-execution
 def successful_index_generation_numbers(wildcards):
-    # Get the specific execution of the "generate_all_indexes" rule.
-    generate_indexes_rule_execution = checkpoints.generate_all_indexes.get(**wildcards)
-
-    # Get the output from that rule. This will be the genome index directory.
-    index_dir = generate_indexes_rule_execution.output.out_dir
-
-    # Use Snakemake's "glob_wildcards" to get the set of split numbers which
-    # successfully created a genome index.
-    search_string = os.path.join(index_dir, "split_{number}.fa")
+    search_string = os.path.join(SPLIT_GENOME_INDEX_DIR, "split_{number}.fa")
     return glob_wildcards(search_string).number
 
 # Gets all of the experiment IDs for all FASTQ files found in the FASTQ directory.
 def fastq_experiment_ids(wildcards):
-    search_string = os.path.join(FASTQ_DIR, "{experiment}.fastq.gz")
+    search_string = os.path.join(FASTQ_DIR, "{experiment}.fq.gz")
     return glob_wildcards(search_string).experiment
 
 # Ensures all of the alignments are completed.
 rule perform_all_alignments:
     input:
         generation_complete_flag = 'all_generated.txt',
-        alignments = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}',
+        alignments = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam',
             number=successful_index_generation_numbers,
             experiment=fastq_experiment_ids)
     output: temp(touch('all_aligned.txt'))
@@ -101,9 +93,9 @@ rule perform_single_alignment:
     input:
         generation_complete_flag = 'all_generated.txt',
         genome_index = f'{SPLIT_GENOME_INDEX_DIR}/split_{{number}}.fa',
-        fastq = f'{FASTQ_DIR}/{{experiment}}.fastq.gz'
+        fastq = f'{FASTQ_DIR}/{{experiment}}.fq.gz'
     output:
-        f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}'
+        f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam'
     script: 'scripts/perform_single_alignment.py'
 
 # Computes all read counts for all splits.
@@ -119,11 +111,14 @@ rule compute_split_read_counts:
     input:
         alignment_complete_flag = 'all_aligned.txt',
         annotations = GENOME_GTF,
-        bam_files = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam', experiment=fastq_experiment_ids)
+        bam_files = expand(
+            f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam',
+            experiment=fastq_experiment_ids,
+            allow_missing=True)
     output:
         read_counts = f'{READ_COUNTS_DIR}/split_{{number}}_read_counts.txt',
         read_stats = f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt'
     params:
-        pair_ended = True   #FIXME
+        pair_ended = False  #FIXME
     script:
         'scripts/read_counts.R'

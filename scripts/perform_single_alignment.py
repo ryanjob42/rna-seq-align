@@ -32,10 +32,11 @@ def direct_main() -> None:
 
 def snakemake_main() -> None:
     '''Runs STAR to perform alignment using data provided by Snakemake.'''
+    output_path = snakemake.output[0].removesuffix('Aligned.sortedByCoord.out.bam')
     perform_alignment(
         snakemake.input.genome_index,
         snakemake.input.fastq,
-        snakemake.output[0]
+        output_path
     )
 
 def perform_alignment(genome_index_path: str, fastq_path: str, output_path: str) -> None:

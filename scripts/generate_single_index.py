@@ -10,6 +10,7 @@ with TemporaryDirectory(dir=TEMP_DIR_PARENT) as temp_dir:
     star_temp_dir = os.path.join(temp_dir, 'star_tmp')
     command = [
         'STAR',
+        '--runThreadN', '128',
         '--runMode', 'genomeGenerate',
         '--genomeDir', f'{snakemake.params.genome_index_dir}/split_{snakemake.wildcards.number}.fa',
         '--genomeFastaFiles', snakemake.input.fasta,

@@ -10,7 +10,7 @@ output-wait: 30
 # Note: some rule executions will be grouped together,
 # so one Slurm job may be several rule executions.
 executor: slurm
-jobs: unlimited
+jobs: 10
 #cores: 128
 #resources:
 #    mem_mb: 500000
@@ -28,10 +28,14 @@ default-resources:
   tasks: 1
   cpus_per_task: 1
   mem_mb_per_cpu: 500
-  runtime: 15     # Runtime is measured in minutes.
+  runtime: 90     # Runtime is measured in minutes.
   slurm_extra: '"--exclusive=user"'     # Notice both the single and double quotes.
 
 set-resources:
+  generate_single_index:
+    cpus_per_task: 128
+    mem_mb_per_cpu: 3500    # About 500,000 MB / 128 cpus. Must use max CPU count with "--exclusive".
+    slurm_extra: '"--exclusive"'    # Notice both the single and double quotes.
   perform_single_alignment:
     cpus_per_task: 128
     mem_mb_per_cpu: 3500    # About 500,000 MB / 128 cpus. Must use max CPU count with "--exclusive".
