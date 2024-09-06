@@ -13,7 +13,6 @@ set-threads:
   split_fasta: 1
   generate_all_indexes: 1
   generate_single_index: 1
-  split_index_list: 1
 
 default-resources:
   slurm_partition: short-cpu
