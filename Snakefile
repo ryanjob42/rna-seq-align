@@ -8,8 +8,11 @@ GENOME_GTF = config['genome-gtf-file']
 FASTQ_DIR = config['fastq-directory']
 SPLIT_COUNT = config['split-count']
 SPLIT_FASTA_DIR = config['split-fasta-output-directory']
-SPLIT_GENOME_INDEX_DIR = config['star-genome-index-output-directory']
-ALIGNMENT_DIR = config['star-alignment-output-directory']
+SPLIT_GENOME_INDEX_DIR = config['genome-index-output-directory']
+STAR_GENOME_INDEX_THREADS = config['star-genome-index-thread-count']
+ALIGNMENT_DIR = config['alignment-output-directory']
+STAR_ALIGNMENT_THREADS = config['star-alignment-thread-count']
+STAR_ALIGNMENT_RAM = config['star-alignment-bam-sort-ram']
 READ_COUNTS_DIR = config['read-counts-output-directory']
 
 # STAR nubmers each split 0, 1, 2, etc. However, they wil be 0-padded to the longest length.
@@ -66,7 +69,8 @@ rule generate_single_index:
         fasta = branch(SPLIT_COUNT > 1, f'split_fasta/split_{{number}}.fa', GENOME_FASTA),
         gtf = GENOME_GTF
     params:
-        genome_index_dir = SPLIT_GENOME_INDEX_DIR
+        star_threads = STAR_GENOME_INDEX_THREADS,
+        genome_index_path = os.path.join(SPLIT_GENOME_INDEX_DIR, f'split_{{number}}.fa')
     output: touch(f'flags/split_index_{{number}}.done')
     script: 'scripts/generate_single_index.py'
 
@@ -99,6 +103,9 @@ rule perform_single_alignment:
         generation_complete_flag = ancient('all_generated.txt'),
         genome_index = f'{SPLIT_GENOME_INDEX_DIR}/split_{{number}}.fa',
         fastq = f'{FASTQ_DIR}/{{experiment}}.fq.gz'
+    params:
+        star_threads = STAR_ALIGNMENT_THREADS,
+        star_memory = STAR_ALIGNMENT_RAM
     output:
         f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam'
     script: 'scripts/perform_single_alignment.py'

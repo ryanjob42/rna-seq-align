@@ -1,26 +1,114 @@
-# The FASTA file containing the genome to split and create indexes of.
+# This file contains settings you can use to control the pipeline somewhat.
+# The most common settings you may need to change are the
+# ones under the "Where to Find Input Files" heading,
+# and the "split-count" setting under "FASTA Splitting Settings".
+
+# For any setting that is a path to a file or directory,
+# it must be on the same machine you're running the workflow from.
+# That is, if you're running on Slipstick, these files must be found
+# on Slipstick, and not Riviera or Racecar (or anywhere else).
+#
+# There are two ways you can write a file path:
+# 1. A relative file path compared to the "Snakefile" file.
+#    Do not start with a leading "./", and do not end with a "/".
+#    While the pipeline should still work, Snakemake does not like it
+#    and does not guarantee that it will always work as expected.
+# 2. An absolute file path. This would start with a "/", and be
+#    something like "/s/b/proj/my_proj/my_file.txt".
+
+##############################################
+# Where to Find Input Files
+##############################################
+
+# The path to the FASTA file containing to split and create genome indexes from.
+# If you don't want any splits, set the "split-count" to 1.
+# A genome index will still be created from this FASTA file.
 genome-fasta-file: data/Mus_musculus.GRCm39.dna_sm.toplevel.fa
 
-# The number of splits to create when splitting the genome FASTA file.
-split-count: 20
-
-# The GTF annotations file.
+# The path to the GTF annotations file to use when running STAR.
 genome-gtf-file: data/Mus_musculus.GRCm39.110.gtf
 
-# The directory where the FASTQ files are stored.
+# The path to the directory where the FASTQ files are stored.
+# Currently, they're all assumed to be single-ended reads.
+# Also, the workflow will align all of the files found here with each
+# genome index successfully created.
+# Ryan will be updating this to allow pair-ended reads as well.
+# Most likely, it'll be done by having two input files:
+# one which lists all the single-ended files,
+# and one that lists all the sets of pair-ended files.
 fastq-directory: fastq
 
-# The directory where the splits of the genome FASTA file will be stored.
+
+##############################################
+# FASTA Splitting Settings
+##############################################
+
+# The number of splits to create when splitting the FASTA file
+# indicated by the "genome-fasta-file" setting.
+# If you don't want to split it, simply set this to 1.
+# An index will then be created using the entire FASTA file.
+split-count: 20
+
+# The path to the directory where the splits of the FASTA file will be stored.
 # These will also be FASTA files.
 split-fasta-output-directory: split_fasta
 
-# The directory where the genome indexes created from the genome FASTA splits will be stored.
-star-genome-index-output-directory: split_genome_index
 
-# The directory where STAR alignments of the FASTQ files will be stored.
-# They are grouped per split.
-star-alignment-output-directory: alignment
+##############################################
+# Genome Index Creation Settings
+##############################################
 
-# The directory where the read counts (and their stats) will be stored.
-# One set of counts is generated per split.
+# The path to the directory where the genome indexes will be stored.
+# The workflow will attempt to create one index per split.
+# However, STAR may report that there are "no valid exon lines in the GTF file"
+# for some splits. In that case, no genome index will be created.
+# This is OK, as it simply means such sequences are of no use, so we can skip them.
+# The workflow is set up with a "checkpoint" so it can detect which FASTA splits
+# were able to successfully create an index.
+# Note: if the "split-count" is set to 1, then an index named "split_0" will still
+# be created, but it will be from the entire FASTA file indicated by the
+# "genome-fasta-file" setting.
+genome-index-output-directory: split_genome_index
+
+# The number of threads that STAR should use when creating a genome index.
+# For running on Slipstick, this should be set to 128 to speed up the process.
+# Note: if you change this, you may also need to change the "cpus_per_task"
+# setting in the "profiles/default/config.yaml" file.
+star-genome-index-thread-count: 128
+
+
+##############################################
+# FASTQ Alignment Settings
+##############################################
+
+# The path to the directory where STAR alignments of the FASTQ files will be stored.
+# Inside this folder, Snakemake will create one sub-folder for each genome index.
+# Each FASTQ file (or pair of them for pair-ended runs) will be aligned to that
+# genome index, and the resulting BAM file will be placed in the folder matching
+# the genome index used.
+alignment-output-directory: alignment
+
+# The number of threads that STAR should use for alignment.
+# For running on Slipstick, this should be set to 128 to speed up the process.
+# Note: if you change this, you may also need to change the "cpus_per_task"
+# setting in the "profiles/default/config.yaml" file.
+star-alignment-thread-count: 128
+
+# The amount of RAM that STAR should limit the BAM sorting to.
+# This is provided to the "--limitBAMsortRAM" option, which is measured
+# in bytes (as of version 2.7.11b at least).
+# For running on Slipstick, this should be set to 500000000000
+# (5E11, or about 500 GB) to speed up the process.
+star-alignment-bam-sort-ram: 500000000000
+
+
+##############################################
+# Read Counts Settings
+##############################################
+
+# The path to the directory where the read counts (and their stats) will be stored.
+# One set of counts is generated per genome index.
+# All of the BAM files for a given split will be used to determine the read
+# counts (and stats) for each genome index.
+# All the output files will be named according to the associated genome index.
 read-counts-output-directory: read_counts
