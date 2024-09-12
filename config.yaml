@@ -47,7 +47,7 @@ fastq-directory: fastq
 # indicated by the "genome-fasta-file" setting.
 # If you don't want to split it, simply set this to 1.
 # An index will then be created using the entire FASTA file.
-split-count: 20
+split-count: 2
 
 # The path to the directory where the splits of the FASTA file will be stored.
 # These will also be FASTA files.
