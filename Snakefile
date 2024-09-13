@@ -34,6 +34,7 @@ if SPLIT_COUNT < 1:
 # All FASTQ files in the same "experiment" are put into STAR together.
 # If there is only a single FASTQ file, it's treated as a single-ended read.
 # Otherwise, if there are multiple, it's treated as a pair-ended read.
+# While parsing, make sure there are no duplicate names.
 FASTQ_FILES = {}
 import csv
 with open(FASTQ_INPUT_FILE_PATH) as fastq_input_file:
@@ -162,6 +163,14 @@ rule compute_all_read_counts:
         read_stats = expand(f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt', number=successful_index_generation_numbers)
     output: temp(touch('all_counts.txt'))
 
+def is_pair_ended(wildcards):
+    '''Checks if we have a pair-ended read or a single-ended read.
+    If an experiment has more than one FASTQ file, it's considered pair-ended.
+    Otherwise, it's considered single-ended.
+    '''
+    fastq_files = FASTQ_FILES[wildcards.experiment]
+    return isinstance(fastq_files, list) and len(fastq_files) > 1
+
 # Computes the read counts for a single split.
 rule compute_split_read_counts:
     input:
@@ -174,6 +183,6 @@ rule compute_split_read_counts:
         read_counts = f'{READ_COUNTS_DIR}/split_{{number}}_read_counts.txt',
         read_stats = f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt'
     params:
-        pair_ended = False  #FIXME
+        pair_ended = is_pair_ended
     script:
         'scripts/read_counts.R'
