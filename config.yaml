@@ -108,6 +108,10 @@ star-alignment-bam-sort-ram: 500000000000
 # Read Counts Settings
 ##############################################
 
+# Use "True" if you are computing the read counts on pair-ended samples,
+# or "False" if you are computing on single-ended.
+single-ended-counts: True
+
 # The path to the directory where the read counts (and their stats) will be stored.
 # One set of counts is generated per genome index.
 # All of the BAM files for a given split will be used to determine the read

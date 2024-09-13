@@ -17,6 +17,7 @@ STAR_GENOME_INDEX_THREADS = config['star-genome-index-thread-count']
 ALIGNMENT_DIR = config['alignment-output-directory']
 STAR_ALIGNMENT_THREADS = config['star-alignment-thread-count']
 STAR_ALIGNMENT_RAM = config['star-alignment-bam-sort-ram']
+SINGLE_ENDED_COUNTS = config['single-ended-counts']
 READ_COUNTS_DIR = config['read-counts-output-directory']
 
 # STAR nubmers each split 0, 1, 2, etc. However, they wil be 0-padded to the longest length.
@@ -141,7 +142,7 @@ rule perform_all_alignments:
 rule perform_single_alignment:
     input:
         genome_index = f'{SPLIT_GENOME_INDEX_DIR}/split_{{number}}.fa',
-        fastq = expand(f'{FASTQ_DIR}/{{fastq_file}}', fastq_file=lookup(dpath='{experiment}', within=FASTQ_FILES))
+        fastq = lookup(dpath='{experiment}', within=FASTQ_FILES)
     params:
         star_threads = STAR_ALIGNMENT_THREADS,
         star_memory = STAR_ALIGNMENT_RAM
@@ -163,26 +164,18 @@ rule compute_all_read_counts:
         read_stats = expand(f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt', number=successful_index_generation_numbers)
     output: temp(touch('all_counts.txt'))
 
-def is_pair_ended(wildcards):
-    '''Checks if we have a pair-ended read or a single-ended read.
-    If an experiment has more than one FASTQ file, it's considered pair-ended.
-    Otherwise, it's considered single-ended.
-    '''
-    fastq_files = FASTQ_FILES[wildcards.experiment]
-    return isinstance(fastq_files, list) and len(fastq_files) > 1
-
 # Computes the read counts for a single split.
 rule compute_split_read_counts:
     input:
         annotations = GENOME_GTF,
         bam_files = expand(
             f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam',
-            experiment=fastq_experiment_ids,
+            experiment=FASTQ_FILES.keys(),
             allow_missing=True)
     output:
         read_counts = f'{READ_COUNTS_DIR}/split_{{number}}_read_counts.txt',
         read_stats = f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt'
     params:
-        pair_ended = is_pair_ended
+        pair_ended = SINGLE_ENDED_COUNTS
     script:
         'scripts/read_counts.R'
