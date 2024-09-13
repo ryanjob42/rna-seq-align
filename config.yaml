@@ -28,15 +28,17 @@ genome-fasta-file: data/Mus_musculus.GRCm39.dna_sm.toplevel.fa
 # The path to the GTF annotations file to use when running STAR.
 genome-gtf-file: data/Mus_musculus.GRCm39.110.gtf
 
-# The path to the directory where the FASTQ files are stored.
-# Currently, they're all assumed to be single-ended reads.
-# Also, the workflow will align all of the files found here with each
-# genome index successfully created.
-# Ryan will be updating this to allow pair-ended reads as well.
-# Most likely, it'll be done by having two input files:
-# one which lists all the single-ended files,
-# and one that lists all the sets of pair-ended files.
-fastq-directory: fastq
+# The path to the file indicating what FASTQ files to align.
+# This file must be a tab-separated file with two columns and a header line.
+# The headers must be "Name" and "Fastq".
+# The "Name" column is used to uniquely identify a read.
+# The "Fastq" column is a comma-separated list of FASTQ files which
+# are all associated with each other for the same read.
+# If only a single FASTQ file is given, it is assumed to be a single-ended read.
+# If multiple are given, it is assumed to be a pair-ended read.
+# You are allowed to mix single-ended and pair-ended reads together
+# as long as everything has a unique name.
+fastq-input-file: data/Inputs.tsv
 
 
 ##############################################

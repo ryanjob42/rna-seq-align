@@ -1,0 +1,3 @@
+Name	Fastq
+SingleEnded	SingleEndedFile.fastq
+PairEnded	PairEndedFile1.fastq,PairEndedFile2.fastq

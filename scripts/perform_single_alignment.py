@@ -4,7 +4,7 @@ import subprocess
 
 from argparse import ArgumentParser
 from tempfile import TemporaryDirectory
-from typing import Union
+from typing import List, Union
 
 # This script can either be run directly, or be run by Snakemake.
 # The "if" statement at the very end detects which case we're in
@@ -21,8 +21,9 @@ def direct_main() -> None:
     The first argument is the number of threads that STAR can use. This is STAR's "--runThreadN" argument.
     The second argument is the amount of memory that STAR can use. This is STAR's "--limitBAMsortRAM" argument.
     The third argument is the path to the genome index. This is STAR's "--genomeDir" argument.
-    The fourth argument is the path to the FASTQ file. This is STAR's "--readFilesIn" argument.
-    The fifth argument is the prefix STAR uses for all output files. This is STAR's "--outFileNamePrefix" argument.
+    The fourth argument is the prefix STAR uses for all output files. This is STAR's "--outFileNamePrefix" argument.
+    The fifth argument and on are the paths to the FASTQ files. This is STAR's "--readFilesIn" argument.
+    If multiple FASTQ files are provided, they will all be given to the "--readFilesIn" argument as a comma-separated list of the files.
     '''
     parser = ArgumentParser(
         prog='STAR Alignment',
@@ -30,10 +31,10 @@ def direct_main() -> None:
     parser.add_argument('star_threads', help='''The number of threads that STAR can use. This is STAR's "--runThreadN" argument.''')
     parser.add_argument('star_memory', help='''The amount of memory that STAR can use. This is STAR's "--limitBAMsortRAM" argument.''')
     parser.add_argument('genome_index_path', help='''The path to the genome index. This is STAR's "--genomeDir" argument.''')
-    parser.add_argument('fastq_path', help='''The path to the FASTQ file. This is STAR's "--readFilesIn" argument.''')
     parser.add_argument('output_prefix', help='''The prefix STAR uses for all output files. This is STAR's "--outFileNamePrefix" argument.''')
+    parser.add_argument('fastq_paths', nargs='+', help='''The path to the FASTQ file. This is STAR's "--readFilesIn" argument.''')
     args = parser.parse_args()
-    perform_alignment(args.star_threads, args.star_memory, args.genome_index_path, args.fastq_path, args.output_prefix)
+    perform_alignment(args.star_threads, args.star_memory, args.genome_index_path, args.fastq_paths, args.output_prefix)
 
 def snakemake_main() -> None:
     '''Runs STAR to perform alignment using data provided by Snakemake.'''
@@ -50,16 +51,16 @@ def snakemake_main() -> None:
         output_prefix
     )
 
-def perform_alignment(threads: Union[str,int], memory: Union[str,int], genome_index_path: str, fastq_path: str, output_prefix: str) -> None:
+def perform_alignment(threads: Union[str,int], memory: Union[str,int], genome_index_path: str, fastq_paths: Union[str, List[str]], output_prefix: str) -> None:
     '''Runs STAR to perform a genome alignment.
     @param genome_index_path The path to the genome index.
-    @param fastq_path The path to the FASTQ file.
+    @param fastq_paths The paths to the FASTQ files. Can be either a single path or a list of them.
     @param output_path The output path.
     '''
     logging.debug('STAR thread count: %s', str(threads))
     logging.debug('STAR RAM limit: %s', str(memory))
     logging.debug('Genome index: %s', genome_index_path)
-    logging.debug('FASTQ file: %s', fastq_path)
+    logging.debug('FASTQ files: %s', ', '.join(fastq_paths))
     logging.debug('Output prefix: %s', output_prefix)
 
     # We want to make sure the "./tmp" directory exists,
@@ -78,11 +79,20 @@ def perform_alignment(threads: Union[str,int], memory: Union[str,int], genome_in
         # It's slightly roundabout, but works well enough.
         star_temp_dir = os.path.join(temp_dir, 'star_tmp')
 
+        # If a list of FASTQ files were given, they all need to
+        # be given to the "--readFilesIn" argument at once as a
+        # comma-separated string. Otherwise, if it's just a
+        # single file, provide it as-is.
+        if isinstance(fastq_paths, list):
+            read_files_arg = ','.join(fastq_paths)
+        else:
+            read_files_arg = fastq_paths
+
         command = [
             'STAR',
             '--runThreadN', str(threads),
             '--genomeDir', genome_index_path,
-            '--readFilesIn', fastq_path,
+            '--readFilesIn', read_files_arg,
             '--readFilesCommand', 'gunzip -c',
             '--outSAMtype', 'BAM', 'SortedByCoordinate',
             '--limitBAMsortRAM', str(memory),

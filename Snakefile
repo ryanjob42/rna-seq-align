@@ -1,3 +1,7 @@
+##############################################
+# Configuration
+##############################################
+
 # Read the configuration file and create some shorthand variables
 # to make it easier to use, and so there is only one place to make
 # changes if the names of the configurations change.
@@ -5,7 +9,7 @@ configfile: 'config.yaml'
 
 GENOME_FASTA = config['genome-fasta-file']
 GENOME_GTF = config['genome-gtf-file']
-FASTQ_DIR = config['fastq-directory']
+FASTQ_INPUT_FILE_PATH = config['fastq-input-file']
 SPLIT_COUNT = config['split-count']
 SPLIT_FASTA_DIR = config['split-fasta-output-directory']
 SPLIT_GENOME_INDEX_DIR = config['genome-index-output-directory']
@@ -23,10 +27,37 @@ if SPLIT_COUNT < 1:
     print(f'The split count must be at least 1, but was: {SPLIT_COUNT}')
     exit(1)
 
+# Read the FASTQ inputs file into a dictionary of lists.
+# The file is a tab-separated file with two columns.
+# The first is the name of the "experiment".
+# The second is a comma-separated list of FASTQ read files associated with it.
+# All FASTQ files in the same "experiment" are put into STAR together.
+# If there is only a single FASTQ file, it's treated as a single-ended read.
+# Otherwise, if there are multiple, it's treated as a pair-ended read.
+FASTQ_FILES = {}
+import csv
+with open(FASTQ_INPUT_FILE_PATH) as fastq_input_file:
+    reader = csv.DictReader(fastq_input_file, delimiter='\t')
+    for line in reader:
+        if line['Name'] in FASTQ_FILES:
+            print(f'The FASTQ input file contained a duplicate name: {line['Name']}')
+            exit(1)
+        FASTQ_FILES[line['Name']] = line['Fastq'].split(',')
+
+
+##############################################
+# Top-Level Rule
+##############################################
+
 # Runs everything.
 rule all:
     input:
         'all_counts.txt'
+
+
+##############################################
+# FASTA Splitting
+##############################################
 
 # Downloads the faSplit tool.
 rule download_faSplit:
@@ -45,6 +76,11 @@ rule split_fasta:
         mkdir -p "{SPLIT_FASTA_DIR}"
         "{{input.fasplit}}" sequence "{{input.fasta:}}" {SPLIT_COUNT} "{{SPLIT_FASTA_DIR}}/split_"
     '''
+
+
+##############################################
+# Genome Index Creation
+##############################################
 
 # Depending on how the splits are performed, some of the generated FASTA files
 # may fail to generate an index. Per Reema, this is OK and we can just ignore those.
@@ -74,6 +110,11 @@ rule generate_single_index:
     output: touch(f'flags/split_index_{{number}}.done')
     script: 'scripts/generate_single_index.py'
 
+
+##############################################
+# Sequence Alignment
+##############################################
+
 # This function will find all of the genome indexes which were actually created
 # by all the "generate_single_index" rule executions. To make sure this behaves
 # with Snakemake's planning, this uses their suggested approach for finding what
@@ -83,32 +124,34 @@ def successful_index_generation_numbers(wildcards):
     search_string = os.path.join(SPLIT_GENOME_INDEX_DIR, "split_{number}.fa")
     return glob_wildcards(search_string).number
 
-# Gets all of the experiment IDs for all FASTQ files found in the FASTQ directory.
-def fastq_experiment_ids(wildcards):
-    search_string = os.path.join(FASTQ_DIR, "{experiment}.fq.gz")
-    return glob_wildcards(search_string).experiment
-
 # Ensures all of the alignments are completed.
+# We need one BAM file for all combinations of split numbers and experiment names.
 rule perform_all_alignments:
     input:
         generation_complete_flag = ancient('all_generated.txt'),
         alignments = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam',
             number=successful_index_generation_numbers,
-            experiment=fastq_experiment_ids)
+            experiment=FASTQ_FILES.keys())
     output: temp(touch('all_aligned.txt'))
 
 # Performs a single alignment.
+# The list of FASTQ files needed is determined by looking up all the file names
+# from the "FASTQ_FILES" dictionary for the associated experiment ID.
 rule perform_single_alignment:
     input:
-        generation_complete_flag = ancient('all_generated.txt'),
         genome_index = f'{SPLIT_GENOME_INDEX_DIR}/split_{{number}}.fa',
-        fastq = f'{FASTQ_DIR}/{{experiment}}.fq.gz'
+        fastq = expand(f'{FASTQ_DIR}/{{fastq_file}}', fastq_file=lookup(dpath='{experiment}', within=FASTQ_FILES))
     params:
         star_threads = STAR_ALIGNMENT_THREADS,
         star_memory = STAR_ALIGNMENT_RAM
     output:
         f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam'
     script: 'scripts/perform_single_alignment.py'
+
+
+##############################################
+# Read Counts and Stats
+##############################################
 
 # Computes all read counts for all splits.
 rule compute_all_read_counts:
