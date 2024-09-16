@@ -17,7 +17,6 @@ STAR_GENOME_INDEX_THREADS = config['star-genome-index-thread-count']
 ALIGNMENT_DIR = config['alignment-output-directory']
 STAR_ALIGNMENT_THREADS = config['star-alignment-thread-count']
 STAR_ALIGNMENT_RAM = config['star-alignment-bam-sort-ram']
-SINGLE_ENDED_COUNTS = config['single-ended-counts']
 READ_COUNTS_DIR = config['read-counts-output-directory']
 
 # STAR nubmers each split 0, 1, 2, etc. However, they wil be 0-padded to the longest length.
@@ -30,9 +29,9 @@ if SPLIT_COUNT < 1:
 
 # Read the FASTQ inputs file into a dictionary of lists.
 # The file is a tab-separated file with two columns.
-# The first is the name of the "experiment".
+# The first is the "sample_id": the unique name given to the sample.
 # The second is a comma-separated list of FASTQ read files associated with it.
-# All FASTQ files in the same "experiment" are put into STAR together.
+# All FASTQ files in the same "sample_id" are put into STAR together.
 # If there is only a single FASTQ file, it's treated as a single-ended read.
 # Otherwise, if there are multiple, it's treated as a pair-ended read.
 # While parsing, make sure there are no duplicate names.
@@ -45,6 +44,28 @@ with open(FASTQ_INPUT_FILE_PATH) as fastq_input_file:
             print(f'The FASTQ input file contained a duplicate name: {line['Name']}')
             exit(1)
         FASTQ_FILES[line['Name']] = line['Fastq'].split(',')
+
+# This function checks if a specific sample ID (per the "Name" column
+# of the FASTQ input file) is a pair-ended read (i.e., True) or a single-ended
+# read (i.e., False). If there is only one file, it's assumed to be single-ended.
+# Otherwise, it's assumed to be pair-ended.
+# This function takes in Snakemake wildcards and checks the "sample_id" wildcard
+# against the "Name" column of the FASTQ input file.
+def is_pair_ended(wildcards):
+    input_files = FASTQ_FILES[wildcards.sample_id]
+    return isinstance(input_files, list) and (len(input_files) > 1)
+
+IS_PAIR_ENDED = {
+    sample_id: (isinstance(fastq_files) and (len(fastq_files) > 1))
+    for sample_id, fastq_files in FASTQ_FILES.items()
+}
+
+# The samples must all be single-ended or must all be pair-ended.
+# We can't allow a mix of the two currently.
+if (True in IS_PAIR_ENDED.values()) and (False in IS_PAIR_ENDED.values()):
+    print('Currently, we require all samples to be single-ended or all samples to be pair-ended, but you provided some of both.')
+    exit(1)
+ALL_PAIR_ENDED = (True in IS_PAIR_ENDED.values())
 
 
 ##############################################
@@ -123,31 +144,31 @@ rule generate_single_index:
 # got created. See the link below.
 # https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#data-dependent-conditional-execution
 def successful_index_generation_numbers(wildcards):
-    search_string = os.path.join(SPLIT_GENOME_INDEX_DIR, "split_{number}.fa")
+    search_string = os.path.join(SPLIT_GENOME_INDEX_DIR, f'split_{{number}}.fa')
     return glob_wildcards(search_string).number
 
 # Ensures all of the alignments are completed.
-# We need one BAM file for all combinations of split numbers and experiment names.
+# We need one BAM file for all combinations of split numbers and sample IDs.
 rule perform_all_alignments:
     input:
         generation_complete_flag = ancient('all_generated.txt'),
-        alignments = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam',
+        alignments = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}Aligned.sortedByCoord.out.bam',
             number=successful_index_generation_numbers,
-            experiment=FASTQ_FILES.keys())
+            sample_id=FASTQ_FILES.keys())
     output: temp(touch('all_aligned.txt'))
 
 # Performs a single alignment.
 # The list of FASTQ files needed is determined by looking up all the file names
-# from the "FASTQ_FILES" dictionary for the associated experiment ID.
+# from the "FASTQ_FILES" dictionary for the associated sample ID.
 rule perform_single_alignment:
     input:
         genome_index = f'{SPLIT_GENOME_INDEX_DIR}/split_{{number}}.fa',
-        fastq = lookup(dpath='{experiment}', within=FASTQ_FILES)
+        fastq = lookup(dpath=f'{{sample_id}}', within=FASTQ_FILES)
     params:
         star_threads = STAR_ALIGNMENT_THREADS,
         star_memory = STAR_ALIGNMENT_RAM
     output:
-        f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam'
+        f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}Aligned.sortedByCoord.out.bam'
     script: 'scripts/perform_single_alignment.py'
 
 
@@ -169,13 +190,13 @@ rule compute_split_read_counts:
     input:
         annotations = GENOME_GTF,
         bam_files = expand(
-            f'{ALIGNMENT_DIR}/split_{{number}}/{{experiment}}Aligned.sortedByCoord.out.bam',
-            experiment=FASTQ_FILES.keys(),
+            f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}Aligned.sortedByCoord.out.bam',
+            sample_id=FASTQ_FILES.keys(),
             allow_missing=True)
+    params:
+        pair_ended = ALL_PAIR_ENDED
     output:
         read_counts = f'{READ_COUNTS_DIR}/split_{{number}}_read_counts.txt',
         read_stats = f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt'
-    params:
-        pair_ended = SINGLE_ENDED_COUNTS
     script:
         'scripts/read_counts.R'

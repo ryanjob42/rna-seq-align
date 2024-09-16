@@ -17,9 +17,15 @@ The default place for them is in the `data` folder here, but you can change the 
 Note: you may need to change the names of these files in the `config.yaml` file.
 
 Third, you'll upload your FASTQ files you want to align.
-The default place for them is in the `fastq` folder here, but you can change that using the `config.yaml` file.
-Currently, the workflow will assume these are all single-ended files, and that you want to use all of them.
-Ryan is working to change this, and will have an update soon.
+You can have them anywhere on the cluster.
+To indicate what files to align, you can create (or update) the `data/Inputs.tsv` file.
+This file is a tab-separated spreadsheet with two columns.
+In the first column, "Name", provide a unique identifier for the sample.
+This will be used in the file name for any generated BAM files.
+In the second column, "Fastq", provide a comma-separated list of FASTQ files to align.
+If only a single file is provided, it is assumed to be a single-ended read (and no commas are required).
+If two or more files are provided, it is assumed to be a pair-ended read (commas are required).
+Note: currently, you must either provide only single-ended samples, or only pair-ended samples.
 
 Finally, once everything is ready, you can simply run the `start-workflow.sh` script.
 This contains the couple of commands needed to run Snakemake.
