@@ -45,16 +45,9 @@ with open(FASTQ_INPUT_FILE_PATH) as fastq_input_file:
             exit(1)
         FASTQ_FILES[line['Name']] = line['Fastq'].split(',')
 
-# This function checks if a specific sample ID (per the "Name" column
-# of the FASTQ input file) is a pair-ended read (i.e., True) or a single-ended
-# read (i.e., False). If there is only one file, it's assumed to be single-ended.
-# Otherwise, it's assumed to be pair-ended.
-# This function takes in Snakemake wildcards and checks the "sample_id" wildcard
-# against the "Name" column of the FASTQ input file.
-def is_pair_ended(wildcards):
-    input_files = FASTQ_FILES[wildcards.sample_id]
-    return isinstance(input_files, list) and (len(input_files) > 1)
-
+# Create a dictionary indicating if each sample is a pair-ended read (i.e., True)
+# or a single-ended read (i.e., False). If the user provided multiple FASTQ files,
+# we assume it's a pair-ended read. Otherwise, we assume it's a single-ended read.
 IS_PAIR_ENDED = {
     sample_id: (isinstance(fastq_files, list) and (len(fastq_files) > 1))
     for sample_id, fastq_files in FASTQ_FILES.items()
