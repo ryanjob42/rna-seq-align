@@ -56,7 +56,7 @@ def is_pair_ended(wildcards):
     return isinstance(input_files, list) and (len(input_files) > 1)
 
 IS_PAIR_ENDED = {
-    sample_id: (isinstance(fastq_files) and (len(fastq_files) > 1))
+    sample_id: (isinstance(fastq_files, list) and (len(fastq_files) > 1))
     for sample_id, fastq_files in FASTQ_FILES.items()
 }
 
