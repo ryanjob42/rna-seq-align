@@ -27,38 +27,40 @@ if SPLIT_COUNT < 1:
     print(f'The split count must be at least 1, but was: {SPLIT_COUNT}')
     exit(1)
 
-# Read the FASTQ inputs file into a dictionary of lists.
-# The file is a tab-separated file with two columns.
-# The first is the "sample_id": the unique name given to the sample.
-# The second is a comma-separated list of FASTQ read files associated with it.
-# All FASTQ files in the same "sample_id" are put into STAR together.
-# If there is only a single FASTQ file, it's treated as a single-ended read.
-# Otherwise, if there are multiple, it's treated as a pair-ended read.
-# While parsing, make sure there are no duplicate names.
+# Parse the FASTQ inputs file, which is a tab-separated file with two columns.
+# The first column is called "Name", and contains a unique ID for a sample.
+# The second column is "Fastq", and contains a comma-separated list of FASTQ files
+# for the same sample. If there are multiple, we assume it's a pair-ended read.
+# Otherwise, we assume it's a single-ended read.
+# From this data, we want a dictionary mapping each sample ID to its list of FASTQ files
+# and separate lists of the pair-ended and single-ended sample IDs.
 FASTQ_FILES = {}
+PAIR_ENDED_SAMPLES = []
+SINGLE_ENDED_SAMPLES = []
+
 import csv
 with open(FASTQ_INPUT_FILE_PATH) as fastq_input_file:
     reader = csv.DictReader(fastq_input_file, delimiter='\t')
     for line in reader:
-        if line['Name'] in FASTQ_FILES:
-            print(f'The FASTQ input file contained a duplicate name: {line['Name']}')
-            exit(1)
-        FASTQ_FILES[line['Name']] = line['Fastq'].split(',')
+        sample_id = line['Name']
+        sample_fastq_files = line['Fastq'].split(',')
+        FASTQ_FILES[sample_id] = sample_fastq_files
+        if len(sample_fastq_files) > 1:
+            PAIR_ENDED_SAMPLES.append(sample_id)
+        else:
+            SINGLE_ENDED_SAMPLES.append(sample_id)
 
-# Create a dictionary indicating if each sample is a pair-ended read (i.e., True)
-# or a single-ended read (i.e., False). If the user provided multiple FASTQ files,
-# we assume it's a pair-ended read. Otherwise, we assume it's a single-ended read.
-IS_PAIR_ENDED = {
-    sample_id: (isinstance(fastq_files, list) and (len(fastq_files) > 1))
-    for sample_id, fastq_files in FASTQ_FILES.items()
-}
-
-# The samples must all be single-ended or must all be pair-ended.
-# We can't allow a mix of the two currently.
-if (True in IS_PAIR_ENDED.values()) and (False in IS_PAIR_ENDED.values()):
-    print('Currently, we require all samples to be single-ended or all samples to be pair-ended, but you provided some of both.')
-    exit(1)
-ALL_PAIR_ENDED = (True in IS_PAIR_ENDED.values())
+# Read counts must be computed separately for pair-ended and single-ended alignments.
+# However, we're not guaranteed to have both.
+# To make it easier for us to define the rule that computes all the counts,
+# we'll create a list which contains "PE" if we have any pair-ended reads
+# and "SE" if we have any single-ended reads (or both if we have both).
+# This way, we can use Snakemake's "expand" function to make the rules easier to read.
+READ_COUNT_ENDEDNESS = []
+if len(PAIR_ENDED_SAMPLES) > 0:
+    READ_COUNT_ENDEDNESS.append('PE')
+if len(SINGLE_ENDED_SAMPLES) > 0:
+    READ_COUNT_ENDEDNESS.append('SE')
 
 
 ##############################################
@@ -145,14 +147,17 @@ def successful_index_generation_numbers(wildcards):
 rule perform_all_alignments:
     input:
         generation_complete_flag = ancient('all_generated.txt'),
-        alignments = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}Aligned.sortedByCoord.out.bam',
+        alignments = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}_{{endedness}}_Aligned.sortedByCoord.out.bam',
             number=successful_index_generation_numbers,
-            sample_id=FASTQ_FILES.keys())
+            sample_id=FASTQ_FILES.keys(),
+            endedness=branch(lookup(dpath=f'{{sample_id}}', within=IS_PAIR_ENDED), 'PE', 'SE'))
     output: temp(touch('all_aligned.txt'))
 
 # Performs a single alignment.
 # The list of FASTQ files needed is determined by looking up all the file names
 # from the "FASTQ_FILES" dictionary for the associated sample ID.
+# The way we call the script doesn't change if it's a pair-ended or single-ended read,
+# just the name of the output file, which we'll use a wildcard to represent.
 rule perform_single_alignment:
     input:
         genome_index = f'{SPLIT_GENOME_INDEX_DIR}/split_{{number}}.fa',
@@ -161,7 +166,7 @@ rule perform_single_alignment:
         star_threads = STAR_ALIGNMENT_THREADS,
         star_memory = STAR_ALIGNMENT_RAM
     output:
-        f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}Aligned.sortedByCoord.out.bam'
+        f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}_{{endedness}}_Aligned.sortedByCoord.out.bam'
     script: 'scripts/perform_single_alignment.py'
 
 
@@ -170,26 +175,66 @@ rule perform_single_alignment:
 ##############################################
 
 # Computes all read counts for all splits.
+# This needs to be done separately for each split of our genome index,
+# and separately for pair-ended and single-ended reads sper split.
 rule compute_all_read_counts:
     input:
-        generation_complete_flag = ancient('all_generated.txt'),
-        alignment_complete_flag = ancient('all_aligned.txt'),
-        read_counts = expand(f'{READ_COUNTS_DIR}/split_{{number}}_read_counts.txt', number=successful_index_generation_numbers),
-        read_stats = expand(f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt', number=successful_index_generation_numbers)
+        # Since we need to know what all the split numbers are to determine
+        # which read counts to compute, we need to have the "all_generated.txt"
+        # flag as an input. This way, Snakemake will update this rule's inputs
+        # once the "generate_all_indexes" checkpoint is complete.
+        ancient('all_generated.txt'),
+
+        # Read counts are computed for each successful split of our genome index.
+        # Furthermore, it's done separately for pair-ended and single-ended reads.
+        # The read count script produces two files: one for the read counts
+        # and one for the read count statistics.
+        expand(
+            f'{READ_COUNTS_DIR}/split_{{number}}_{{endedness}}_{{count_type}}.txt',
+            number=successful_index_generation_numbers
+            endedness=READ_COUNT_ENDEDNESS,
+            count_type=['read_counts', 'read_count_stats'])
+
     output: temp(touch('all_counts.txt'))
 
-# Computes the read counts for a single split.
-rule compute_split_read_counts:
+# Computes the counts for pair-ended reads.
+# We have separate rules for pair-ended and single-ended reads
+# just to make the rules easier to read.
+rule compute_pe_read_counts:
     input:
         annotations = GENOME_GTF,
+
+        # Only compute read counts over the pair-ended alignments.
+        # We want the split number to be populated from the wildcard in our output,
+        # so we need to tell "expand" that it's OK that it won't be populating all
+        # of the wildcards (i.e., the "allow_missing=True" argument).
         bam_files = expand(
-            f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}Aligned.sortedByCoord.out.bam',
-            sample_id=FASTQ_FILES.keys(),
+            f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}_PE_Aligned.sortedByCoord.out.bam',
+            sample_id=PAIR_ENDED_SAMPLES,
             allow_missing=True)
     params:
-        pair_ended = ALL_PAIR_ENDED
+        pair_ended = True
     output:
-        read_counts = f'{READ_COUNTS_DIR}/split_{{number}}_read_counts.txt',
-        read_stats = f'{READ_COUNTS_DIR}/split_{{number}}_read_count_stats.txt'
-    script:
-        'scripts/read_counts.R'
+        read_counts = f'{READ_COUNTS_DIR}/split_{{number}}_PE_read_counts.txt',
+        read_stats = f'{READ_COUNTS_DIR}/split_{{number}}_PE_read_count_stats.txt'
+
+# Computes the counts for pair-ended reads.
+# We have separate rules for pair-ended and single-ended reads
+# just to make the rules easier to read.
+rule compute_se_read_counts:
+    input:
+        annotations = GENOME_GTF,
+
+        # Only compute read counts over the single-ended alignments.
+        # We want the split number to be populated from the wildcard in our output,
+        # so we need to tell "expand" that it's OK that it won't be populating all
+        # of the wildcards (i.e., the "allow_missing=True" argument).
+        bam_files = expand(
+            f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}_SE_Aligned.sortedByCoord.out.bam',
+            sample_id=PAIR_ENDED_SAMPLES,
+            allow_missing=True)
+    params:
+        pair_ended = False
+    output:
+        read_counts = f'{READ_COUNTS_DIR}/split_{{number}}_SE_read_counts.txt',
+        read_stats = f'{READ_COUNTS_DIR}/split_{{number}}_SE_read_count_stats.txt'
