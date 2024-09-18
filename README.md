@@ -25,7 +25,7 @@ This will be used in the file name for any generated BAM files.
 In the second column, "Fastq", provide a comma-separated list of FASTQ files to align.
 If only a single file is provided, it is assumed to be a single-ended read (and no commas are required).
 If two or more files are provided, it is assumed to be a pair-ended read (commas are required).
-Note: currently, you must either provide only single-ended samples, or only pair-ended samples.
+Pair-ended and single-ended reads can be provided in the same file.
 
 Finally, once everything is ready, you can simply run the `start-workflow.sh` script.
 This contains the couple of commands needed to run Snakemake.
