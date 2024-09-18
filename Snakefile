@@ -147,10 +147,14 @@ def successful_index_generation_numbers(wildcards):
 rule perform_all_alignments:
     input:
         generation_complete_flag = ancient('all_generated.txt'),
-        alignments = expand(f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}_{{endedness}}_Aligned.sortedByCoord.out.bam',
+        pair_ended_alignments = expand(
+            f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}_PE_Aligned.sortedByCoord.out.bam',
             number=successful_index_generation_numbers,
-            sample_id=FASTQ_FILES.keys(),
-            endedness=branch(lookup(dpath=f'{{sample_id}}', within=IS_PAIR_ENDED), 'PE', 'SE'))
+            sample_id=PAIR_ENDED_SAMPLES),
+        single_ended_alignments = expand(
+            f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}_SE_Aligned.sortedByCoord.out.bam',
+            number=successful_index_generation_numbers,
+            sample_id=SINGLE_ENDED_SAMPLES),
     output: temp(touch('all_aligned.txt'))
 
 # Performs a single alignment.
@@ -191,7 +195,7 @@ rule compute_all_read_counts:
         # and one for the read count statistics.
         expand(
             f'{READ_COUNTS_DIR}/split_{{number}}_{{endedness}}_{{count_type}}.txt',
-            number=successful_index_generation_numbers
+            number=successful_index_generation_numbers,
             endedness=READ_COUNT_ENDEDNESS,
             count_type=['read_counts', 'read_count_stats'])
 
@@ -217,6 +221,7 @@ rule compute_pe_read_counts:
     output:
         read_counts = f'{READ_COUNTS_DIR}/split_{{number}}_PE_read_counts.txt',
         read_stats = f'{READ_COUNTS_DIR}/split_{{number}}_PE_read_count_stats.txt'
+    script: 'scripts/read_counts.R'
 
 # Computes the counts for pair-ended reads.
 # We have separate rules for pair-ended and single-ended reads
@@ -231,10 +236,11 @@ rule compute_se_read_counts:
         # of the wildcards (i.e., the "allow_missing=True" argument).
         bam_files = expand(
             f'{ALIGNMENT_DIR}/split_{{number}}/{{sample_id}}_SE_Aligned.sortedByCoord.out.bam',
-            sample_id=PAIR_ENDED_SAMPLES,
+            sample_id=SINGLE_ENDED_SAMPLES,
             allow_missing=True)
     params:
         pair_ended = False
     output:
         read_counts = f'{READ_COUNTS_DIR}/split_{{number}}_SE_read_counts.txt',
         read_stats = f'{READ_COUNTS_DIR}/split_{{number}}_SE_read_count_stats.txt'
+    script: 'scripts/read_counts.R'
